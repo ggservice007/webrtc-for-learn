@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="renderer" content="webkit">
+  <title>Local Media</title>
+  <style>
+    video {
+      width: 320px;
+      height: 240px;
+      border: 1px solid black;
+    }
+
+    div {
+      display: inline-block;
+    }
+
+  </style>
+</head>
+<body>
+<script src="./dist/adapter.debug.js"></script>
+<script>
+
+  var myVideoStream, myVideo;
+
+  window.onload = function() {
+    myVideo = document.getElementById('myVideo');
+    getMedia();
+  }
+
+  function getMedia() {
+    var constraints =  {
+      video: {
+        facingMode: "user"
+        //facingMode: {exact: "environment"}
+      }
+    };
+
+    getUserMedia(constraints,
+                gotUserMeida, didnotGetUserMedia);
+  }
+
+  function gotUserMeida(stream) {
+    myVideoStream = stream;
+    // display my local video to me
+    attachMediaStream(myVideo, myVideoStream);
+  }
+
+  function didnotGetUserMedia() {
+    console.log("couldn't get video");
+  }
+
+</script>
+  <div id="setup">
+    <p>WebRTC Book Demo (local media only)</p>
+  </div>
+  <br/>
+  <div style="width: 30%; vertical-align:top">
+    <div>
+      <video id="myVideo" autoplay="autoplay" controls muted="true" />
+    </div>
+  </div>
+</body>
+</html>

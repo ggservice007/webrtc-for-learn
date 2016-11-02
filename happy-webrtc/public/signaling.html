@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="renderer" content="webkit">
+  <title>Signaling</title>
+  <style>
+    video {
+      width: 320px;
+      height: 240px;
+      border: 1px solid black;
+    }
+
+    div {
+      display: inline-block;
+    }
+
+  </style>
+</head>
+<body>
+<script src="./dist/adapter.debug.js"></script>
+<script src="./js/clientXHRSignalingChannel.js"></script>
+<script>
+
+  var signalingChannel, key, id,
+      haveLocalMedia = false,
+      connected = false,
+      myVideoStream, myVideo;
+
+
+
+  window.onload = function() {
+
+    var queryparams = {};
+
+    location.search.substr(1).split("&").forEach(function(item) {
+        var s = item.split("="),
+            k = s[0],
+            v = s[1] && decodeURIComponent(s[1]);
+        (queryparams[k] = queryparams[k] || []).push(v)
+    });
+
+    if(queryparams && queryparams['key']) {
+      document.getElementById('key').value = queryparams['key'];
+      connect();
+    }
+
+    myVideo = document.getElementById('myVideo');
+
+    getMedia();
+
+  }
+
+
+
+  // load or when the user clicks on the "Connect" button.
+  function connect() {
+    var errorCB, scHandlers, handleMsg;
+
+    // First, get the key used to connect
+    key = document.getElementById("key").value;
+
+    // This is the handler for all messages received on the
+    // signaling channel.
+    handleMsg = function(msg) {
+      // Post the message on-screen
+      var msgE = document.getElementById("inmessages");
+      var msgString = JSON.stringify(msg);
+      msgE.value = msgString + "\n" + msgE.value;
+    };
+
+    // handlers for signaling channel
+    scHanlders = {
+      'onWaiting': function() {
+        setStatus("Waiting");
+      },
+      'onConnected': function() {
+        connected = true;
+        setStatus('Connected');
+        // wait for local media to be ready
+        verifySetupDone();
+      },
+      'onMessage': handleMsg
+    };
+
+    // Finally, create signaling channel
+    signalingChannel = createSignalingChannel(key, scHanlders);
+    errorCB = function(msg) {
+      document.getElementById('response').innerHTML = msg;
+    };
+
+    // and connect.
+    signalingChannel.connect(errorCB);
+
+  }
+
+  // This routine sends a message on the signaling channel, either
+  // by explicit call or by the user clicking on the Send button.
+  function send(msg) {
+    var handler = function(res) {
+      document.getElementById('response').innerHTML = res;
+      return;
+    };
+
+    // Get message if not passed in
+    msg = msg || document.getElementById('message').value;
+
+    // Post it on-screen
+    msgE = document.getElementById('outmessages');
+    var msgString = JSON.stringify(msg);
+    msgE.value = msgString + "\n" + msgE.value;
+
+    // and send on signaling channel
+    signalingChannel.send(msg, handler);
+  }
+
+  // getting local media
+  function getMedia() {
+    getUserMedia({"audio": false, "video": true},
+                 gotUserMedia, didnotGetUserMedia);
+  }
+
+  function gotUserMedia(stream) {
+    myVideoStream = stream;
+    haveLocalMedia = true;
+
+    // display my local video to me
+    attachMediaStream(myVideo, myVideoStream);
+    // wait for signaling channel to be set up
+    verifySetupDone();
+  }
+
+  function didnotGetUserMedia() {
+    console.log("Couldn't get video");
+  }
+
+  // This guard routine effectively synchronizes completion of two
+  // async activities: the creation of the signaling channel and
+  // acquisition of local media.
+  function verifySetupDone() {
+    // If signaling channel is ready and we have local media,
+    // proceed.
+    if(connected && haveLocalMedia) {
+      setStatus('Set up');
+    }
+  }
+
+  // This function hides, displays and fills various UI elements
+  // to give the user some idea of how the browse is progressing
+  // at setting up the signaling channel and getting local media.
+  function setStatus(str) {
+
+    var statusLineE = document.getElementById('statusline'),
+        statusE = document.getElementById('status'),
+        sendE = document.getElementById('send'),
+        connectE = document.getElementById('connect'),
+        scMessageE = document.getElementById('scMessage');
+
+    switch (str) {
+      case 'Waiting':
+        statusLineE.style.display = 'inline';
+        statusE.innerHTML =
+          "Waiting for peer signaling connection";
+        sendE.style.display = "none";
+        break;
+      case 'Connected':
+        statusLineE.style.display = 'inline';
+        statusE.innerHTML =
+          "Peer signaling connected, waiting for local media";
+        sendE.style.display = 'inline';
+        scMessageE.style.display = 'inline-block';
+        break;
+      case 'Set up':
+        statusE.innerHTML =
+          "Peer signaling connected and local media obtained";
+        break;
+    }
+  }
+
+</script>
+  <div id="setup">
+    <p>WebRTC Book Demo (local media and signaling only)</p>
+    <p>Key:
+      <input type="text" name="key" id="key"
+        onkeyup="if (event.keyCode == 13) {
+                connect(); return false;
+                }"/>
+      <button id="connect" onclick="connect()">Connect</button>
+      <span id="statusline" style="display:none">Status:
+        <span id="status">Disconnected</span>
+      </span>
+    </p>
+  </div>
+
+  <br/>
+
+  <div id="scMessage" style="display:none;">
+    <p>Signaling channel message:
+      <input type="text" width="100%" name="message" id="message"
+        onkeyup="if (event.keyCode == 13) {
+          send(); return false;
+        }"/>
+      <button id="send" style="display:none" onclick="send();">Send</button>
+    </p>
+    <p>Response: <span id="response"></span></p>
+  </div>
+
+  <br/>
+
+  <div style="width:30%; vertical-align:top;padding-right: 150px;">
+    <div>
+      <video id="myVideo" autoplay="autoplay" controls muted="true" />
+    </div>
+    <p>
+      <b>Outgoing Messages</b>
+      <br/>
+      <textarea id="outmessages" rows="20" style="width:320px;"></textarea>
+    </p>
+  </div>
+
+  <div style="width:30%; vertical-align:top">
+    <div>
+      <video id="placeholder" autoplay="autoplay" controls />
+    </div>
+    <p>
+      <b>Incoming Messages</b>
+      <br/>
+      <textarea id="inmessages" rows="20" style="width:320px;"></textarea>
+    </p>
+  </div>
+
+</body>
+</html>
